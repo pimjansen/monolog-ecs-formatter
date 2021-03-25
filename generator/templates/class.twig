@@ -1,0 +1,41 @@
+<?php
+
+declare(strict_types=1);
+
+namespace PimJansen\Monolog\Formatter\Type;
+
+use PimJansen\Monolog\Formatter\EcsTypeInterface;
+
+/**
+ * {{ description }}
+ *
+ * @version {{ version }}
+ * @see {{ docsUrl }}
+ */
+final class {{ className }} implements EcsTypeInterface
+{
+    private array $data = [];
+
+{% for method in methodCollection %}
+    /**
+     * {{ method.description }}
+     *
+     * @example {{ method.example }}
+     */
+    public function set{{ method.name }}({{ method.type }} $value): {{  className }}
+    {
+        $this->data['{{ method.internal | raw }}'] = $value;
+        return $this;
+    }
+
+{% endfor %}
+    public function getTypeName(): string
+    {
+        return '{{ name }}';
+    }
+
+    public function jsonSerialize(): array
+    {
+        return $this->data;
+    }
+}

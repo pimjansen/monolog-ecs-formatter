@@ -1,0 +1,24 @@
+{
+    "name": "pimjansen/monolog-ecs-formatter",
+    "description": "Monolog formatter for Elastic Common Schema",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^7.3",
+        "monolog/monolog": "^2.2"
+    },
+    "require-dev": {
+        "ext-json": "*",
+        "twig/twig": "^3.3",
+        "symfony/yaml": "^5.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "PimJansen\\Monolog\\Formatter\\": "src/"
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
+
+}
