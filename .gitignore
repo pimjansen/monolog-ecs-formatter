@@ -1,4 +1,4 @@
 /vendor/
 /.idea
-/src/Type/*
+./src/Type/*
 ./test.php
