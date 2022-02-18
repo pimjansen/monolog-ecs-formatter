@@ -1,6 +1,6 @@
 <?php
 
-namespace ECS\generator;
+namespace ECS\Generator;
 
 use Symfony\Component\Yaml\Yaml;
 use Twig\Environment;
