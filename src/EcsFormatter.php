@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace PimJansen\Monolog\Formatter;
+namespace ECS\Formatter;
 
 use Monolog\Formatter\NormalizerFormatter;
-use PimJansen\Monolog\Formatter\Type\EcsTypeInterface;
+use ECS\Formatter\EcsTypeInterface;
 use Throwable;
 
 class EcsFormatter extends NormalizerFormatter

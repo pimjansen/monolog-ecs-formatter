@@ -1,5 +1,7 @@
 <?php
 
+namespace ECS\generator;
+
 use Symfony\Component\Yaml\Yaml;
 use Twig\Environment;
 use Twig\Loader\FilesystemLoader;
