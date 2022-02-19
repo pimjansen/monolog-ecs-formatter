@@ -14,8 +14,7 @@
     },
     "autoload": {
         "psr-4": {
-            "ECS\\Formatter\\": "src/",
-            "ECS\\Generator\\": "generator/"
+            "ECS\\Formatter\\": "src/"
         }
     },
     "config": {

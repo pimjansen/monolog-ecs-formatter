@@ -1,6 +1,6 @@
 <?php
 
-namespace ECS\Generator;
+namespace ECS\Formatter\Generator;
 
 use Symfony\Component\Yaml\Yaml;
 use Twig\Environment;
@@ -19,9 +19,7 @@ final class EcsGenerator
     public function stringToHungarian(string $string): string
     {
         $string = str_replace('_', '', ucwords($string, '_'));
-        $string = str_replace('.', '', ucwords($string, '.'));
-        $string = str_replace(' ', '', $string);
-        return $string;
+        return str_replace(array('.', ' '), '', ucwords($string, '.'));
     }
 
     /**
