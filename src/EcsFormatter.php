@@ -73,14 +73,6 @@ class EcsFormatter extends NormalizerFormatter
         foreach ($inRecord['context'] as $key => $context) {
             $arrayKey = $this->getFirstArrayKey($context);
             if (is_array($context) === true && array_key_exists($arrayKey, $this->schema) === true) {
-                foreach ($context as $item) {
-                   foreach ($item as $item2) {
-                       if (array_key_exists(array_key_first($item2), $this->schema[array_key_first($item)]) === true) {
-                           // does not work
-                           var_dump(true);
-                       }
-                   }
-                }
                 $outRecord += array_shift($context);
                 unset($inRecord['context'][$key]);
                 continue;
