@@ -50,6 +50,7 @@ class EcsFormatter extends NormalizerFormatter
      */
     public function format(array $record): string
     {
+        $this->dd($this->getSchema());
         $inRecord = $this->normalize($record);
 
         // Build Skeleton with "@timestamp" and "log.level"
@@ -93,6 +94,40 @@ class EcsFormatter extends NormalizerFormatter
         return $this->toJson($outRecord) . "\n";
     }
 
+    public function dd($data)
+    {
+        var_dump($data);
+        die();
+    }
+
+    private function getSchema()
+    {
+        $methodCollection = [];
+        foreach ($this->schema as $type => $data) {
+            foreach ($data['fields'] as $field => $fieldData) {
+                $methodCollection[$data['name']] = [
+                    'name' => $field,
+                    'type' => $this->elasticTypeToPhp($fieldData['type']),
+                ];
+            }
+        }
+
+        return $methodCollection;
+    }
+
+    public function elasticTypeToPhp(string $type): string
+    {
+        switch ($type) {
+            case 'keyword':
+                return 'string';
+            case 'number':
+            case 'long':
+                return 'int';
+            default:
+                return $type;
+        }
+    }
+
     /** @inheritDoc */
     protected function normalize($data, int $depth = 0)
     {
@@ -110,10 +145,11 @@ class EcsFormatter extends NormalizerFormatter
         return parent::normalize($data, $depth);
     }
 
-    public function dd($data)
+    private function getFirstArrayKey(array $context): string
     {
-        var_dump($data);
-        die();
+        return strtolower(
+            substr(array_key_first($context), strrpos(array_key_first($context), '\\') + 1)
+        );
     }
 
     private function formatContext(array $inContext, array &$outRecord): void
@@ -191,12 +227,5 @@ class EcsFormatter extends NormalizerFormatter
         if (!empty($originVal)) {
             $outRecord['log']['origin'] = $originVal;
         }
-    }
-
-    private function getFirstArrayKey(array $context): string
-    {
-        return strtolower(
-            substr(array_key_first($context), strrpos(array_key_first($context), '\\') + 1)
-        );
     }
 }
