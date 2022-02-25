@@ -5,21 +5,23 @@ declare(strict_types=1);
 namespace ECS\Formatter;
 
 use Monolog\Formatter\NormalizerFormatter;
-use ECS\Formatter\EcsTypeInterface;
-use Throwable;
+use Symfony\Component\Yaml\Yaml;
 
 class EcsFormatter extends NormalizerFormatter
 {
     private const ECS_VERSION = '1.8.0';
 
+    private const ECS_SCHEMA = 'https://raw.githubusercontent.com/elastic/ecs/master/generated/ecs/ecs_nested.yml';
+
     private static $logOriginKeys = ['file' => true, 'line' => true, 'class' => true, 'function' => true];
 
     /**
      * @var array
-     *
      * @link https://www.elastic.co/guide/en/ecs/current/ecs-base.html
      */
     protected $tags;
+
+    protected $schema;
 
     /** @var bool */
     protected $useLogOriginFromContext = true;
@@ -30,37 +32,18 @@ class EcsFormatter extends NormalizerFormatter
     public function __construct(array $tags = [])
     {
         parent::__construct('Y-m-d\TH:i:s.uP');
+        $this->schema = Yaml::parse(file_get_contents(self::ECS_SCHEMA));
         $this->tags = $tags;
     }
 
-    // public function useLogOriginFromContext(bool $useLogOriginFromContext): self
-    // {
-    //     $this->useLogOriginFromContext = $useLogOriginFromContext;
-    //     return $this;
-    // }
-
-    /** @inheritDoc */
-    protected function normalize($data, int $depth = 0)
+    public function useLogOriginFromContext(bool $useLogOriginFromContext): self
     {
-        if ($depth > $this->maxNormalizeDepth) {
-            return parent::normalize($data, $depth);
-        }
-
-        if ($data instanceof Throwable) {
-            die('STOP throwable');
-            //return EcsError::serialize($data);
-        }
-
-        //if ($data instanceof EcsError) {
-        //    return $data->jsonSerialize();
-        //}
-
-        return parent::normalize($data, $depth);
+        $this->useLogOriginFromContext = $useLogOriginFromContext;
+        return $this;
     }
 
     /**
      * {@inheritdoc}
-     *
      * @link https://www.elastic.co/guide/en/ecs/1.1/ecs-log.html
      * @link https://www.elastic.co/guide/en/ecs/1.1/ecs-base.html
      * @link https://www.elastic.co/guide/en/ecs/current/ecs-tracing.html
@@ -73,27 +56,40 @@ class EcsFormatter extends NormalizerFormatter
         $outRecord = [
             '@timestamp' => $inRecord['datetime'],
             'log' => [
-                'level'  => $inRecord['level_name'],
+                'level' => $inRecord['level_name'],
                 'logger' => $inRecord['channel'],
             ],
             'ecs' => [
                 'version' => self::ECS_VERSION,
-            ]
+            ],
         ];
 
         // Add "message"
         if (isset($inRecord['message']) === true) {
             $outRecord['message'] = $inRecord['message'];
+            $inRecord['labels'] = [];
         }
 
-        // Render all type contexts
         foreach ($inRecord['context'] as $key => $context) {
-            if (is_array($context) && preg_match('/^PimJansen\\\Monolog\\\Formatter\\\Type\\\.*$/', array_key_first($context))) {
+            $arrayKey = $this->getFirstArrayKey($context);
+            if (is_array($context) === true && array_key_exists($arrayKey, $this->schema) === true) {
+                foreach ($context as $item) {
+                   foreach ($item as $item2) {
+                       if (array_key_exists(array_key_first($item2), $this->schema[array_key_first($item)]) === true) {
+                           // does not work
+                           var_dump(true);
+                       }
+                   }
+                }
                 $outRecord += array_shift($context);
                 unset($inRecord['context'][$key]);
+                continue;
             }
+            $inRecord['labels'] += $context;
+            unset($inRecord['context'][$key]);
         }
 
+        $this->formatContext($inRecord, /* ref */ $outRecord);
         $this->formatContext($inRecord['extra'], /* ref */ $outRecord);
         $this->formatContext($inRecord['context'], /* ref */ $outRecord);
 
@@ -105,6 +101,29 @@ class EcsFormatter extends NormalizerFormatter
         return $this->toJson($outRecord) . "\n";
     }
 
+    /** @inheritDoc */
+    protected function normalize($data, int $depth = 0)
+    {
+        if ($depth > $this->maxNormalizeDepth) {
+            return parent::normalize($data, $depth);
+        }
+
+//        if ($data instanceof Throwable) {
+//            return EcsError::serialize($data);
+//        }
+//
+//        if ($data instanceof EcsError) {
+//            return $data->jsonSerialize();
+//        }
+        return parent::normalize($data, $depth);
+    }
+
+    public function dd($data)
+    {
+        var_dump($data);
+        die();
+    }
+
     private function formatContext(array $inContext, array &$outRecord): void
     {
         $foundLogOriginKeys = false;
@@ -112,73 +131,80 @@ class EcsFormatter extends NormalizerFormatter
         // Context should go to the top of the out record
         foreach ($inContext as $contextKey => $contextVal) {
             // label keys should be sanitized
-            // if ($contextKey === 'labels') {
-            //     $outLabels = [];
-            //     foreach ($contextVal as $labelKey => $labelVal) {
-            //         $outLabels[str_replace(['.', ' ', '*', '\\'], '_', trim($labelKey))] = $labelVal;
-            //     }
-            //     $outRecord['labels'] = $outLabels;
-            //     continue;
-            // }
+            if ($contextKey === 'labels') {
+                $outLabels = [];
+                foreach ($contextVal as $labelKey => $labelVal) {
+                    $outLabels[str_replace(['.', ' ', '*', '\\'], '_', trim($labelKey))] = $labelVal;
+                }
+                $outRecord['labels'] = $outLabels;
+                continue;
+            }
 
-            // if ($this->useLogOriginFromContext) {
-            //     if (isset(self::$logOriginKeys[$contextKey])) {
-            //         $foundLogOriginKeys = true;
-            //         continue;
-            //     }
-            // }
+            if ($this->useLogOriginFromContext) {
+                if (isset(self::$logOriginKeys[$contextKey])) {
+                    $foundLogOriginKeys = true;
+                    continue;
+                }
+            }
 
             $outRecord[$contextKey] = $contextVal;
         }
 
-        //if ($foundLogOriginKeys) {
-        //    $this->formatLogOrigin($inContext, /* ref */ $outRecord);
-        //}
+        if ($foundLogOriginKeys) {
+            $this->formatLogOrigin($inContext, /* ref */ $outRecord);
+        }
     }
 
-    //private function formatLogOrigin(array $inContext, array &$outRecord): void
-    //{
-    //    $originVal = [];
-    //
-    //    $fileVal = [];
-    //    if (array_key_exists('file', $inContext)) {
-    //        $fileName = $inContext['file'];
-    //        if (is_string($fileName)) {
-    //            $fileVal['name'] = $fileName;
-    //        }
-    //    }
-    //    if (array_key_exists('line', $inContext)) {
-    //        $fileLine = $inContext['line'];
-    //        if (is_int($fileLine)) {
-    //            $fileVal['line'] = $fileLine;
-    //        }
-    //    }
-    //    if (!empty($fileVal)) {
-    //        $originVal['file'] = $fileVal;
-    //    }
-    //
-    //    $outFunctionVal = null;
-    //    if (array_key_exists('function', $inContext)) {
-    //        $inFunctionVal = $inContext['function'];
-    //        if (is_string($inFunctionVal)) {
-    //            if (array_key_exists('class', $inContext)) {
-    //                $inClassVal = $inContext['class'];
-    //                if (is_string($inClassVal)) {
-    //                    $outFunctionVal = $inClassVal . '::' . $inFunctionVal;
-    //                }
-    //            }
-    //
-    //            if ($outFunctionVal === null) {
-    //                $outFunctionVal = $inFunctionVal;
-    //            }
-    //        }
-    //    }
-    //    if ($outFunctionVal !== null) {
-    //        $originVal['function'] = $outFunctionVal;
-    //    }
-    //
-    //    if (!empty($originVal)) {
-    //        $outRecord['log']['origin'] = $originVal;
-    //    }
-    //}
+    private function formatLogOrigin(array $inContext, array &$outRecord): void
+    {
+        $originVal = [];
+
+        $fileVal = [];
+        if (array_key_exists('file', $inContext)) {
+            $fileName = $inContext['file'];
+            if (is_string($fileName)) {
+                $fileVal['name'] = $fileName;
+            }
+        }
+        if (array_key_exists('line', $inContext)) {
+            $fileLine = $inContext['line'];
+            if (is_int($fileLine)) {
+                $fileVal['line'] = $fileLine;
+            }
+        }
+        if (!empty($fileVal)) {
+            $originVal['file'] = $fileVal;
+        }
+
+        $outFunctionVal = null;
+        if (array_key_exists('function', $inContext)) {
+            $inFunctionVal = $inContext['function'];
+            if (is_string($inFunctionVal)) {
+                if (array_key_exists('class', $inContext)) {
+                    $inClassVal = $inContext['class'];
+                    if (is_string($inClassVal)) {
+                        $outFunctionVal = $inClassVal . '::' . $inFunctionVal;
+                    }
+                }
+
+                if ($outFunctionVal === null) {
+                    $outFunctionVal = $inFunctionVal;
+                }
+            }
+        }
+        if ($outFunctionVal !== null) {
+            $originVal['function'] = $outFunctionVal;
+        }
+
+        if (!empty($originVal)) {
+            $outRecord['log']['origin'] = $originVal;
+        }
+    }
+
+    private function getFirstArrayKey(array $context): string
+    {
+        return strtolower(
+            substr(array_key_first($context), strrpos(array_key_first($context), '\\') + 1)
+        );
+    }
 }
