@@ -84,6 +84,7 @@ class EcsFormatter extends NormalizerFormatter
 
                         if ($contextItemKey === $schemaItem['name']) {
                             $outRecord[$key][$contextItemKey] = $contextItem;
+                            unset($inRecord['context'][$key][$contextItemKey]);
                             continue;
                         }
 
@@ -91,7 +92,6 @@ class EcsFormatter extends NormalizerFormatter
                         unset($inRecord['context'][$key][$contextItemKey]);
                     }
                 }
-                $outRecord[$key] = $context;
                 unset($inRecord['context'][$key]);
                 continue;
             }
@@ -209,17 +209,5 @@ class EcsFormatter extends NormalizerFormatter
     {
         var_dump($data);
         die();
-    }
-
-    function recursive($array)
-    {
-        foreach($array as $key => $value){
-            if(is_array($value)){
-                $this->recursive($value);
-                continue;
-            }
-
-            var_dump($value);
-        }
     }
 }
