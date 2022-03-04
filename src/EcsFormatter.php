@@ -50,8 +50,8 @@ class EcsFormatter extends NormalizerFormatter
      */
     public function format(array $record): string
     {
-        $this->dd($this->getSchema());
         $inRecord = $this->normalize($record);
+        $inRecord['labels'] = [];
 
         // Build Skeleton with "@timestamp" and "log.level"
         $outRecord = [
@@ -68,13 +68,30 @@ class EcsFormatter extends NormalizerFormatter
         // Add "message"
         if (isset($inRecord['message']) === true) {
             $outRecord['message'] = $inRecord['message'];
-            $inRecord['labels'] = [];
         }
 
         foreach ($inRecord['context'] as $key => $context) {
-            $arrayKey = $this->getFirstArrayKey($context);
-            if (is_array($context) === true && array_key_exists($arrayKey, $this->schema) === true) {
-                $outRecord += array_shift($context);
+            if (is_array($context) === true && array_key_exists($key, $this->schema) === true) {
+                foreach ($context as $contextItemKey => $contextItem) {
+                    foreach ($this->schema[$key]['fields'] as $schemaItem) {
+                        if (array_key_exists($schemaItem['name'], $context) === false) {
+                            continue;
+                        }
+                        if (is_array($context[$schemaItem['name']]) === true) {
+                            // skip arrays for now.
+                            continue;
+                        }
+
+                        if ($contextItemKey === $schemaItem['name']) {
+                            $outRecord[$key][$contextItemKey] = $contextItem;
+                            continue;
+                        }
+
+                        $inRecord['labels'][$key][$contextItemKey] = $contextItem;
+                        unset($inRecord['context'][$key][$contextItemKey]);
+                    }
+                }
+                $outRecord[$key] = $context;
                 unset($inRecord['context'][$key]);
                 continue;
             }
@@ -94,40 +111,6 @@ class EcsFormatter extends NormalizerFormatter
         return $this->toJson($outRecord) . "\n";
     }
 
-    public function dd($data)
-    {
-        var_dump($data);
-        die();
-    }
-
-    private function getSchema()
-    {
-        $methodCollection = [];
-        foreach ($this->schema as $type => $data) {
-            foreach ($data['fields'] as $field => $fieldData) {
-                $methodCollection[$data['name']] = [
-                    'name' => $field,
-                    'type' => $this->elasticTypeToPhp($fieldData['type']),
-                ];
-            }
-        }
-
-        return $methodCollection;
-    }
-
-    public function elasticTypeToPhp(string $type): string
-    {
-        switch ($type) {
-            case 'keyword':
-                return 'string';
-            case 'number':
-            case 'long':
-                return 'int';
-            default:
-                return $type;
-        }
-    }
-
     /** @inheritDoc */
     protected function normalize($data, int $depth = 0)
     {
@@ -143,13 +126,6 @@ class EcsFormatter extends NormalizerFormatter
 //            return $data->jsonSerialize();
 //        }
         return parent::normalize($data, $depth);
-    }
-
-    private function getFirstArrayKey(array $context): string
-    {
-        return strtolower(
-            substr(array_key_first($context), strrpos(array_key_first($context), '\\') + 1)
-        );
     }
 
     private function formatContext(array $inContext, array &$outRecord): void
@@ -226,6 +202,24 @@ class EcsFormatter extends NormalizerFormatter
 
         if (!empty($originVal)) {
             $outRecord['log']['origin'] = $originVal;
+        }
+    }
+
+    public function dd($data)
+    {
+        var_dump($data);
+        die();
+    }
+
+    function recursive($array)
+    {
+        foreach($array as $key => $value){
+            if(is_array($value)){
+                $this->recursive($value);
+                continue;
+            }
+
+            var_dump($value);
         }
     }
 }
