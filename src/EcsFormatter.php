@@ -11,8 +11,6 @@ class EcsFormatter extends NormalizerFormatter
 {
     private const ECS_VERSION = '1.8.0';
 
-    private const ECS_SCHEMA = 'https://raw.githubusercontent.com/elastic/ecs/master/generated/ecs/ecs_nested.yml';
-
     private static $logOriginKeys = ['file' => true, 'line' => true, 'class' => true, 'function' => true];
 
     /**
@@ -20,8 +18,6 @@ class EcsFormatter extends NormalizerFormatter
      * @link https://www.elastic.co/guide/en/ecs/current/ecs-base.html
      */
     protected $tags;
-
-    protected $schema;
 
     /** @var bool */
     protected $useLogOriginFromContext = true;
@@ -32,7 +28,6 @@ class EcsFormatter extends NormalizerFormatter
     public function __construct(array $tags = [])
     {
         parent::__construct('Y-m-d\TH:i:s.uP');
-        $this->schema = Yaml::parse(file_get_contents(self::ECS_SCHEMA));
         $this->tags = $tags;
     }
 
@@ -50,7 +45,6 @@ class EcsFormatter extends NormalizerFormatter
      */
     public function format(array $record): string
     {
-        $this->dd($this->getSchema());
         $inRecord = $this->normalize($record);
 
         // Build Skeleton with "@timestamp" and "log.level"
@@ -72,8 +66,10 @@ class EcsFormatter extends NormalizerFormatter
         }
 
         foreach ($inRecord['context'] as $key => $context) {
-            $arrayKey = $this->getFirstArrayKey($context);
-            if (is_array($context) === true && array_key_exists($arrayKey, $this->schema) === true) {
+            if (
+                is_array($context) === true
+                && preg_match('/^ECS\\\Formatter\\\Type\\\.*$/', array_key_first($context))
+            ) {
                 $outRecord += array_shift($context);
                 unset($inRecord['context'][$key]);
                 continue;
@@ -94,40 +90,6 @@ class EcsFormatter extends NormalizerFormatter
         return $this->toJson($outRecord) . "\n";
     }
 
-    public function dd($data)
-    {
-        var_dump($data);
-        die();
-    }
-
-    private function getSchema()
-    {
-        $methodCollection = [];
-        foreach ($this->schema as $type => $data) {
-            foreach ($data['fields'] as $field => $fieldData) {
-                $methodCollection[$data['name']] = [
-                    'name' => $field,
-                    'type' => $this->elasticTypeToPhp($fieldData['type']),
-                ];
-            }
-        }
-
-        return $methodCollection;
-    }
-
-    public function elasticTypeToPhp(string $type): string
-    {
-        switch ($type) {
-            case 'keyword':
-                return 'string';
-            case 'number':
-            case 'long':
-                return 'int';
-            default:
-                return $type;
-        }
-    }
-
     /** @inheritDoc */
     protected function normalize($data, int $depth = 0)
     {
@@ -143,13 +105,6 @@ class EcsFormatter extends NormalizerFormatter
 //            return $data->jsonSerialize();
 //        }
         return parent::normalize($data, $depth);
-    }
-
-    private function getFirstArrayKey(array $context): string
-    {
-        return strtolower(
-            substr(array_key_first($context), strrpos(array_key_first($context), '\\') + 1)
-        );
     }
 
     private function formatContext(array $inContext, array &$outRecord): void
@@ -227,5 +182,11 @@ class EcsFormatter extends NormalizerFormatter
         if (!empty($originVal)) {
             $outRecord['log']['origin'] = $originVal;
         }
+    }
+
+    public function dd($data)
+    {
+        var_dump($data);
+        die();
     }
 }
