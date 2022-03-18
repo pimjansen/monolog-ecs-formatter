@@ -26,6 +26,9 @@ class EcsFormatter extends NormalizerFormatter
     /** @var bool */
     protected $useLogOriginFromContext = true;
 
+    /** @var EcsHelper $ecsHelper */
+    private $ecsHelper;
+
     /**
      * @param array $tags optional tags to enrich the log lines
      */
@@ -34,6 +37,7 @@ class EcsFormatter extends NormalizerFormatter
         parent::__construct('Y-m-d\TH:i:s.uP');
         $this->schema = Yaml::parse(file_get_contents(self::ECS_SCHEMA));
         $this->tags = $tags;
+        $this->ecsHelper = new EcsHelper();
     }
 
     public function useLogOriginFromContext(bool $useLogOriginFromContext): self
@@ -72,30 +76,25 @@ class EcsFormatter extends NormalizerFormatter
 
         foreach ($inRecord['context'] as $key => $context) {
             if (is_array($context) === true && array_key_exists($key, $this->schema) === true) {
+                $contextSchemaFields = $this->ecsHelper->getFieldData(
+                    $this->schema[$key]['fields']
+                );
                 foreach ($context as $contextItemKey => $contextItem) {
-                    foreach ($this->schema[$key]['fields'] as $schemaItem) {
-                        if (array_key_exists($schemaItem['name'], $context) === false) {
-                            continue;
-                        }
-                        if (is_array($context[$schemaItem['name']]) === true) {
-                            // skip arrays for now.
-                            continue;
-                        }
-
-                        if ($contextItemKey === $schemaItem['name']) {
+                    foreach ($contextSchemaFields as $schemaField) {
+                        if (
+                            array_key_exists($schemaField['name'], $context) === true
+                            && $contextItemKey === $schemaField['name']
+                        ) {
                             $outRecord[$key][$contextItemKey] = $contextItem;
                             unset($inRecord['context'][$key][$contextItemKey]);
                             continue;
                         }
-
-                        $inRecord['labels'][$key][$contextItemKey] = $contextItem;
-                        unset($inRecord['context'][$key][$contextItemKey]);
                     }
                 }
-                unset($inRecord['context'][$key]);
-                continue;
             }
-            $inRecord['labels'] += $context;
+            if (empty($inRecord['context'][$key]) === false) {
+                $inRecord['labels'][$key] = $inRecord['context'][$key];
+            }
             unset($inRecord['context'][$key]);
         }
 
@@ -126,6 +125,13 @@ class EcsFormatter extends NormalizerFormatter
 //            return $data->jsonSerialize();
 //        }
         return parent::normalize($data, $depth);
+    }
+
+
+    public function dd($data)
+    {
+        var_dump($data);
+        die();
     }
 
     private function formatContext(array $inContext, array &$outRecord): void
@@ -203,11 +209,5 @@ class EcsFormatter extends NormalizerFormatter
         if (!empty($originVal)) {
             $outRecord['log']['origin'] = $originVal;
         }
-    }
-
-    public function dd($data)
-    {
-        var_dump($data);
-        die();
     }
 }
