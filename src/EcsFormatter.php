@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ECS\Formatter;
 
+use Adbar\Dot;
 use Monolog\Formatter\NormalizerFormatter;
 use Symfony\Component\Yaml\Yaml;
 
@@ -79,15 +80,28 @@ class EcsFormatter extends NormalizerFormatter
                 $contextSchemaFields = $this->ecsHelper->getFieldData(
                     $this->schema[$key]['fields']
                 );
+
                 foreach ($context as $contextItemKey => $contextItem) {
                     foreach ($contextSchemaFields as $schemaField) {
+                        if (is_array($contextItem) === true) {
+                            $fieldName = $contextItemKey . '.' . array_key_first($contextItem);
+                            if ($fieldName === $schemaField['name']) {
+                                $this->shitShit(
+                                    [$contextItemKey => $contextItem],
+                                    $contextSchemaFields,
+                                    $key,
+                                    $inRecord,
+                                    $outRecord
+                                );
+                            }
+                        }
+
                         if (
                             array_key_exists($schemaField['name'], $context) === true
                             && $contextItemKey === $schemaField['name']
                         ) {
                             $outRecord[$key][$contextItemKey] = $contextItem;
                             unset($inRecord['context'][$key][$contextItemKey]);
-                            continue;
                         }
                     }
                 }
@@ -127,11 +141,25 @@ class EcsFormatter extends NormalizerFormatter
         return parent::normalize($data, $depth);
     }
 
-
-    public function dd($data)
+    private function shitShit(array $contextItem, array $contextSchemaFields, $key, &$inRecord, &$outRecord)
     {
-        var_dump($data);
-        die();
+        $dotContextItem = new Dot($contextItem);
+        $flattenContext = $dotContextItem->flatten();
+        $dotContextSchemaFields = new Dot($contextSchemaFields);
+        foreach ($dotContextItem as $contextItemKey => $item) {
+            foreach ($dotContextSchemaFields as $schemaField) {
+                foreach ($item as $itemOneKey => $itemOne)
+                {
+                    if (
+                        array_key_exists($schemaField['name'], $flattenContext) === true
+                        && $contextItemKey . '.' . $itemOneKey === $schemaField['name']
+                    ) {
+                        $outRecord[$key][$contextItemKey][$itemOneKey] = $itemOne;
+                        unset($inRecord['context'][$key][$contextItemKey][$itemOneKey]);
+                    }
+                }
+            }
+        }
     }
 
     private function formatContext(array $inContext, array &$outRecord): void
