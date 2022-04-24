@@ -77,35 +77,28 @@ class EcsFormatter extends NormalizerFormatter
 
         foreach ($inRecord['context'] as $key => $context) {
             if (is_array($context) === true && array_key_exists($key, $this->schema) === true) {
-                $contextSchemaFields = $this->ecsHelper->getFieldData(
+                $contextSchemaFields = $this->ecsHelper->getAvailableFields(
                     $this->schema[$key]['fields']
                 );
-
                 foreach ($context as $contextItemKey => $contextItem) {
-                    foreach ($contextSchemaFields as $schemaField) {
-                        if (is_array($contextItem) === true) {
-                            $fieldName = $contextItemKey . '.' . array_key_first($contextItem);
-                            if ($fieldName === $schemaField['name']) {
-                                $this->shitShit(
-                                    [$contextItemKey => $contextItem],
-                                    $contextSchemaFields,
-                                    $key,
-                                    $inRecord,
-                                    $outRecord
-                                );
+                    if (is_array($contextItem) === true) {
+                        $dotContextItem = new Dot([$contextItemKey => $contextItem]);
+                        $flattenContextItem = $dotContextItem->flatten();
+                        foreach ($flattenContextItem as $flattenKey => $flattenItem) {
+                            if (in_array($flattenKey, $contextSchemaFields, true) === true) {
+                                $this->ecsHelper->unsetter($flattenKey, $inRecord['context'][$key]);
+                                $this->ecsHelper->set($key . '.' . $flattenKey, (string)$flattenItem, $outRecord);
                             }
                         }
+                    }
 
-                        if (
-                            array_key_exists($schemaField['name'], $context) === true
-                            && $contextItemKey === $schemaField['name']
-                        ) {
-                            $outRecord[$key][$contextItemKey] = $contextItem;
-                            unset($inRecord['context'][$key][$contextItemKey]);
-                        }
+                    if (in_array($contextItemKey, $contextSchemaFields, true) === true) {
+                        $outRecord[$key][$contextItemKey] = $contextItem;
+                        unset($inRecord['context'][$key][$contextItemKey]);
                     }
                 }
             }
+
             if (empty($inRecord['context'][$key]) === false) {
                 $inRecord['labels'][$key] = $inRecord['context'][$key];
             }
@@ -139,27 +132,6 @@ class EcsFormatter extends NormalizerFormatter
 //            return $data->jsonSerialize();
 //        }
         return parent::normalize($data, $depth);
-    }
-
-    private function shitShit(array $contextItem, array $contextSchemaFields, $key, &$inRecord, &$outRecord)
-    {
-        $dotContextItem = new Dot($contextItem);
-        $flattenContext = $dotContextItem->flatten();
-        $dotContextSchemaFields = new Dot($contextSchemaFields);
-        foreach ($dotContextItem as $contextItemKey => $item) {
-            foreach ($dotContextSchemaFields as $schemaField) {
-                foreach ($item as $itemOneKey => $itemOne)
-                {
-                    if (
-                        array_key_exists($schemaField['name'], $flattenContext) === true
-                        && $contextItemKey . '.' . $itemOneKey === $schemaField['name']
-                    ) {
-                        $outRecord[$key][$contextItemKey][$itemOneKey] = $itemOne;
-                        unset($inRecord['context'][$key][$contextItemKey][$itemOneKey]);
-                    }
-                }
-            }
-        }
     }
 
     private function formatContext(array $inContext, array &$outRecord): void
