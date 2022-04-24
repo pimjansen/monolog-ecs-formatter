@@ -86,8 +86,9 @@ class EcsFormatter extends NormalizerFormatter
                         $flattenContextItem = $dotContextItem->flatten();
                         foreach ($flattenContextItem as $flattenKey => $flattenItem) {
                             if (in_array($flattenKey, $contextSchemaFields, true) === true) {
-                                $this->ecsHelper->unsetter($flattenKey, $inRecord['context'][$key]);
-                                $this->ecsHelper->set($key . '.' . $flattenKey, (string)$flattenItem, $outRecord);
+                                $fullPath = sprintf('%s.%s', $key, $flattenKey);
+                                $this->ecsHelper->unsetter($fullPath, $inRecord['context']);
+                                $this->ecsHelper->set($fullPath, $flattenItem, $outRecord);
                             }
                         }
                     }

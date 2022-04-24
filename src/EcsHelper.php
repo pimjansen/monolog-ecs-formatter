@@ -87,18 +87,18 @@ class EcsHelper
         }
     }
 
-    public function unsetter($path, &$array): void
+    public function unsetter(string $fullPath, array &$array): void
     {
-        $path = explode('.', $path);
-        $path = "['" . implode("']['", $path) . "']";
-        eval("unset(\$array{$path});");
+        $paths = explode('.', $fullPath);
+        $paths = "['" . implode("']['", $paths) . "']";
+        eval("unset(\$array{$paths});");
     }
 
-    public function set($path, string $value, &$array): void
+    public function set(string $fullPath, $value,array &$array): void
     {
-        $path = explode('.', $path);
-        $path = "['" . implode("']['", $path) . "']";
-        eval("\$array{$path} = 'pars error';");
+        $paths = explode('.', $fullPath);
+        $paths = "['" . implode("']['", $paths) . "']";
+        eval("\$array{$paths} = \$value;");
     }
 
 }
