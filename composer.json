@@ -5,16 +5,18 @@
     "license": "MIT",
     "require": {
         "php": "^7.3",
+        "ext-json": "*",
+        "adbario/php-dot-notation": "^2.2",
         "monolog/monolog": "^2.2"
     },
     "require-dev": {
-        "ext-json": "*",
-        "twig/twig": "^3.3",
-        "symfony/yaml": "^5.2"
+        "symfony/var-dumper": "^5.4",
+        "symfony/yaml": "^5.2",
+        "twig/twig": "^3.3"
     },
     "autoload": {
         "psr-4": {
-            "PimJansen\\Monolog\\Formatter\\": "src/"
+            "ECS\\Formatter\\": "src/"
         }
     },
     "config": {

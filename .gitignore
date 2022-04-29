@@ -1,3 +1,4 @@
-/vendor/
 /.idea
-/src/Type/*
+/vendor/
+/src/Ecs-schema/*
+test.php

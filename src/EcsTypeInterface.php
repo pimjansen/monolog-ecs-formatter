@@ -1,5 +1,5 @@
 <?php
-namespace PimJansen\Monolog\Formatter;
+namespace ECS\Formatter;
 
 use JsonSerializable;
 
