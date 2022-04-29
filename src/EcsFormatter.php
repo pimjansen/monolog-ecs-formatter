@@ -6,13 +6,10 @@ namespace ECS\Formatter;
 
 use Adbar\Dot;
 use Monolog\Formatter\NormalizerFormatter;
-use Symfony\Component\Yaml\Yaml;
 
 class EcsFormatter extends NormalizerFormatter
 {
     private const ECS_VERSION = '1.8.0';
-
-    private const ECS_SCHEMA = 'https://raw.githubusercontent.com/elastic/ecs/master/generated/ecs/ecs_nested.yml';
 
     private static $logOriginKeys = ['file' => true, 'line' => true, 'class' => true, 'function' => true];
 
@@ -36,9 +33,9 @@ class EcsFormatter extends NormalizerFormatter
     public function __construct(array $tags = [])
     {
         parent::__construct('Y-m-d\TH:i:s.uP');
-        $this->schema = Yaml::parse(file_get_contents(self::ECS_SCHEMA));
-        $this->tags = $tags;
         $this->ecsHelper = new EcsHelper();
+        $this->tags = $tags;
+        $this->schema = $this->ecsHelper->getSchema();
     }
 
     public function useLogOriginFromContext(bool $useLogOriginFromContext): self
@@ -70,15 +67,14 @@ class EcsFormatter extends NormalizerFormatter
             ],
         ];
 
-        // Add "message"
         if (isset($inRecord['message']) === true) {
             $outRecord['message'] = $inRecord['message'];
         }
 
         foreach ($inRecord['context'] as $key => $context) {
             if (is_array($context) === true && array_key_exists($key, $this->schema) === true) {
-                $contextSchemaFields = $this->ecsHelper->getAvailableFields(
-                    $this->schema[$key]['fields']
+                $contextSchemaFields = $this->ecsHelper->getSchemaFields(
+                    $this->schema[$key]
                 );
                 foreach ($context as $contextItemKey => $contextItem) {
                     if (is_array($contextItem) === true) {
@@ -86,9 +82,9 @@ class EcsFormatter extends NormalizerFormatter
                         $flattenContextItem = $dotContextItem->flatten();
                         foreach ($flattenContextItem as $flattenKey => $flattenItem) {
                             if (in_array($flattenKey, $contextSchemaFields, true) === true) {
-                                $fullPath = sprintf('%s.%s', $key, $flattenKey);
-                                $this->ecsHelper->unsetter($fullPath, $inRecord['context']);
-                                $this->ecsHelper->set($fullPath, $flattenItem, $outRecord);
+                                $fullDotedPath = sprintf('%s.%s', $key, $flattenKey);
+                                $this->ecsHelper->setToOutRecord($fullDotedPath, $flattenItem, $outRecord);
+                                $this->ecsHelper->unsetFromInRecord($fullDotedPath, $inRecord['context']);
                             }
                         }
                     }
@@ -103,6 +99,11 @@ class EcsFormatter extends NormalizerFormatter
             if (empty($inRecord['context'][$key]) === false) {
                 $inRecord['labels'][$key] = $inRecord['context'][$key];
             }
+
+            if (is_array($inRecord['labels'][$key]) === true) {
+                $this->ecsHelper->emptyUnsetRecursively($inRecord['labels'][$key]);
+            }
+
             unset($inRecord['context'][$key]);
         }
 
@@ -151,11 +152,9 @@ class EcsFormatter extends NormalizerFormatter
                 continue;
             }
 
-            if ($this->useLogOriginFromContext) {
-                if (isset(self::$logOriginKeys[$contextKey])) {
-                    $foundLogOriginKeys = true;
-                    continue;
-                }
+            if ($this->useLogOriginFromContext && isset(self::$logOriginKeys[$contextKey])) {
+                $foundLogOriginKeys = true;
+                continue;
             }
 
             $outRecord[$contextKey] = $contextVal;

@@ -3,119 +3,43 @@
 namespace ECS\Formatter\Generator;
 
 use Symfony\Component\Yaml\Yaml;
-use Twig\Environment;
-use Twig\Loader\FilesystemLoader;
 
 final class EcsGenerator
 {
-    private const RESERVED_TYPE_NAMES = [
-        'Interface',
-    ];
+    private const ECS_SCHEMA = 'https://raw.githubusercontent.com/elastic/ecs/master/generated/ecs/ecs_nested.yml';
 
-    /**
-     * @param string $string
-     * @return string
-     */
-    public function stringToHungarian(string $string): string
-    {
-        $string = str_replace('_', '', ucwords($string, '_'));
-        return str_replace(array('.', ' '), '', ucwords($string, '.'));
-    }
-
-    /**
-     * @param string $field
-     * @return string
-     */
-    public function formatInternalField(string $field): string
-    {
-        $field = str_replace(".", "']['", $field);
-        return $field;
-    }
-
-    /**
-     * @param string $type
-     * @return string
-     */
-    public function elasticTypeToPhp(string $type): string
-    {
-        switch($type) {
-            case 'keyword':
-                return 'string';
-            case 'number':
-            case 'long':
-                return 'int';
-            default:
-                return $type;
-        }
-    }
-
-    /**
-     * @param array $fields
-     * @return array
-     */
-    public function getMethodFieldData(array $fields): array
-    {
-        $methodCollection = [];
-        foreach ($fields as $field => $fieldData) {
-            $methodCollection[] = [
-                'name' => $this->stringToHungarian($field),
-                'internal' => $this->formatInternalField($field),
-                'type' => $this->elasticTypeToPhp($fieldData['type']),
-                'description' => $this->formatDescription($fieldData['description'], 4),
-                'example' => $fieldData['example'] ?? null,
-            ];
-        }
-
-        return $methodCollection;
-    }
-
-    /**
-     * @param string $text
-     * @return string
-     */
-    private function formatDescription(string $text, int $indent=0): string
-    {
-        //return $text;
-        $indentString = '';
-        for ($i=0;$i<=$indent;$i++) {
-            $indentString .= ' ';
-        }
-        return str_replace("\n", "\n".$indentString."* ", $text);
-    }
+    private const ECS_SCHEMA_FILE_NAME = 'ecs-schema';
 
     public function __invoke()
     {
-        $loader = new FilesystemLoader('./templates');
-        $twig = new Environment($loader, [
-            'debug' => true,
-        ]);
-        $schema = Yaml::parse(file_get_contents($_SERVER['argv'][1]));
-        foreach ($schema as $type => $data) {
-            $className = $this->stringToHungarian($data['title']);
-            echo $className.PHP_EOL;
-            if (in_array($className, self::RESERVED_TYPE_NAMES, true)) {
-                $className .= 'Type';
-                echo 'Classname is reserved word, changing to: '.$className.PHP_EOL;
-            }
-            $template = $twig->load('class.twig');
+        $schema = Yaml::parse(
+            file_get_contents(self::ECS_SCHEMA)
+        );
+        $info = [
+            'sync-info' => [
+                'created_at' => date('Y-m-d H:i:s'),
+            ],
+        ];
+        $schema = array_merge($info, $schema);
 
-            // Output content
-            $renderedClassTemplate = $template->render([
-                'name' => $data['name'],
-                'className' => $className,
-                'version' => 'v1.8',
-                'description' => $this->formatDescription($data['description']),
-                'docsUrl' => 'https://www.elastic.co/guide/en/ecs/current/ecs-'.$data['name'].'.html',
-                'methodCollection' => $this->getMethodFieldData($data['fields']),
-            ]);
+        try {
             file_put_contents(
-                sprintf(
-                    '../src/Type/%s.php',
-                    $className
-                ),
-                $renderedClassTemplate
+                $this->getFileName(),
+                json_encode([
+                    'schema' => $schema,
+                ], JSON_THROW_ON_ERROR) . PHP_EOL,
             );
+        } catch (\Exception $exception) {
+            echo sprintf('error:%s with code:%s', $exception->getMessage(), $exception->getCode());
         }
+    }
+
+    private function getFileName(): string
+    {
+        return sprintf(
+            '../src/Ecs-schema/%s.json',
+            self::ECS_SCHEMA_FILE_NAME
+        );
     }
 }
 

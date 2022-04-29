@@ -2,45 +2,8 @@
 
 namespace ECS\Formatter;
 
-class EcsHelper
+final class EcsHelper
 {
-    public function __construct()
-    {
-    }
-
-    /**
-     * @param string $string
-     * @return string
-     */
-    public function stringToHungarian(string $string): string
-    {
-        $string = str_replace('_', '', ucwords($string, '_'));
-        return str_replace(array('.', ' '), '', ucwords($string, '.'));
-    }
-
-    /**
-     * @param string $field
-     * @return string
-     */
-    public function formatInternalField(string $field): string
-    {
-        $field = str_replace(".", "']['", $field);
-        return $field;
-    }
-
-    public function getFieldData(array $fields): array
-    {
-        $fieldDataCollection = [];
-        foreach ($fields as $field => $fieldData) {
-            $fieldDataCollection[] = [
-                'name' => $this->filedNameFormatter($field),
-                'type' => $this->elasticTypeToPhp($fieldData['type']),
-            ];
-        }
-
-        return $fieldDataCollection;
-    }
-
     /**
      * @param string $string
      * @return string
@@ -68,37 +31,68 @@ class EcsHelper
         }
     }
 
-    public function getAvailableFields(array $fields): array
+    public function getSchemaFields(array $schema): array
     {
         $fieldDataCollection = [];
-        foreach ($fields as $field => $fieldData) {
+        foreach ($schema['fields'] as $field => $fieldData) {
             $fieldDataCollection[] = $this->filedNameFormatter($field);
         }
 
         return $fieldDataCollection;
     }
 
-    public function dotSeparatedStringToArray(&$output, string $string): void
+    public function getSchema(): array
     {
-        $keys = explode('.', $string);
+        try {
+            $schemaFileContent = file_get_contents('src/Ecs-schema/ecs-schema.json');
+            if ($schemaFileContent === false) {
+                throw new \RuntimeException('Failed to open stream: No such file or directory');
+            }
+        } catch (\Exception $exception) {
+            if ($exception instanceof \RuntimeException) {
+                shell_exec('php Generator/EcsGenerator.php');
+            }
+        }
 
-        while ($key = array_shift($keys)) {
-            $output = &$output[$key];
+        $schemaContentArray = json_decode($schemaFileContent, true, 512, JSON_THROW_ON_ERROR);
+        $sixMonthsFromTimeGap = date("Y-m-d H:i:s", strtotime("+6 months"));
+        if ($schemaContentArray['schema']['sync-info']['created_at'] > $sixMonthsFromTimeGap) {
+            throw new \Exception('ecs schema is out of sync! please run the generator command.');
+        }
+
+        return $schemaContentArray['schema'];
+    }
+
+    public function unsetFromInRecord(string $fullDotedPath, array &$array): void
+    {
+        $path = $this->getArrayPath($fullDotedPath);
+
+        eval("unset(\$array{$path});");
+    }
+
+    public function setToOutRecord(string $fullDotedPath, $value, array &$array): void
+    {
+        $path = $this->getArrayPath($fullDotedPath);
+
+        eval("\$array{$path} = \$value;");
+    }
+
+    public function getArrayPath(string $fullDotedPath): string
+    {
+        $endpoints = explode('.', $fullDotedPath);
+
+        return "['" . implode("']['", $endpoints) . "']";
+    }
+
+    public function emptyUnsetRecursively(&$inRecord): void
+    {
+        foreach ($inRecord as $key => $item) {
+            if (is_array($item) === true && empty($item) === false) {
+                $this->emptyUnsetRecursively($item);
+            }
+            if (empty($item) === true) {
+                unset($inRecord[$key]);
+            }
         }
     }
-
-    public function unsetter(string $fullPath, array &$array): void
-    {
-        $paths = explode('.', $fullPath);
-        $paths = "['" . implode("']['", $paths) . "']";
-        eval("unset(\$array{$paths});");
-    }
-
-    public function set(string $fullPath, $value,array &$array): void
-    {
-        $paths = explode('.', $fullPath);
-        $paths = "['" . implode("']['", $paths) . "']";
-        eval("\$array{$paths} = \$value;");
-    }
-
 }
