@@ -6,7 +6,7 @@ the following command generates the ecs-schema from the following endpoint:
 `https://raw.githubusercontent.com/elastic/ecs/master/generated/ecs/ecs_nested.yml`
 
 ```shell
- php Generator/EcsGenerator.php
+ mkdir src/Ecs-schema & php Generator/EcsGenerator.php
 ```
 
 ## Expected Format
